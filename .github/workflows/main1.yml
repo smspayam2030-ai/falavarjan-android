@@ -1,0 +1,59 @@
+
+name: Build Falavarjan Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'falavarjan-android-project.zip'
+      - '.github/workflows/build-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download project files
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Extract project ZIP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip
+          unzip -q falavarjan-android-project.zip -d extracted
+
+      - name: Find Android Gradle project
+        id: project
+        shell: bash
+        run: |
+          WRAPPER=$(find extracted -type f -name gradlew -print -quit)
+          if [ -z "$WRAPPER" ]; then
+            echo "ERROR: No gradlew found in ZIP."
+            echo "The ZIP may not contain a complete Android Studio project."
+            find extracted -maxdepth 3 -type f | head -100
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$WRAPPER")
+          chmod +x "$WRAPPER"
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Found project at: $PROJECT_DIR"
+
+      - name: Build debug APK
+        working-directory: .
+        run: |
+          cd "${{ steps.project.outputs.dir }}"
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: falavarjan-android-apk
+          path: |
+            extracted/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
